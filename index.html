@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Persona 5: Arcade</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: 'Impact', Arial Black, sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      display: block;
+      margin: auto;
+      position: relative;
+      z-index: 10;
+      box-shadow: 0 0 60px rgba(236, 28, 36, 0.6);
+    }
+
+    /* ── PANELES LATERALES ─────────────────────────────── */
+    .side {
+      position: fixed;
+      top: 0;
+      height: 100vh;
+      z-index: 5;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .side-left  { left: 0;   right: auto; }
+    .side-right { right: 0;  left: auto;  }
+
+    /* Anchura dinámica: lo que sobre a cada lado del canvas */
+    .side-left,
+    .side-right {
+      width: calc((100vw - min(100vh * 480 / 854, 100vw)) / 2);
+    }
+
+    /* ── LÍNEAS DIAGONALES ANIMADAS ────────────────────── */
+    .diag-line {
+      position: absolute;
+      width: 200%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #ec1c24, transparent);
+      opacity: 0;
+      animation: sweep linear infinite;
+      transform-origin: left center;
+    }
+
+    @keyframes sweep {
+      0%   { opacity: 0; top: -10%; transform: rotate(-35deg) translateX(-60%); }
+      10%  { opacity: 0.6; }
+      90%  { opacity: 0.4; }
+      100% { opacity: 0; top: 110%; transform: rotate(-35deg) translateX(20%); }
+    }
+
+    /* ── BLOQUES RECTANGULARES ESTILO P5 ───────────────── */
+    .rect-block {
+      position: absolute;
+      background: #ec1c24;
+      opacity: 0;
+      animation: blockSlide linear infinite;
+    }
+
+    @keyframes blockSlide {
+      0%   { opacity: 0;   transform: translateX(-120%) skewX(-15deg); }
+      15%  { opacity: 0.9; }
+      85%  { opacity: 0.7; }
+      100% { opacity: 0;   transform: translateX(120%) skewX(-15deg); }
+    }
+
+    /* ── TEXTO VOLANDO ─────────────────────────────────── */
+    .fly-text {
+      position: absolute;
+      color: #ec1c24;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      opacity: 0;
+      white-space: nowrap;
+      animation: flyUp linear infinite;
+    }
+
+    @keyframes flyUp {
+      0%   { opacity: 0;   transform: translateY(60px)  rotate(-90deg); }
+      20%  { opacity: 0.5; }
+      80%  { opacity: 0.4; }
+      100% { opacity: 0;   transform: translateY(-60px) rotate(-90deg); }
+    }
+
+    /* ── PARTÍCULAS ────────────────────────────────────── */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: #ec1c24;
+      opacity: 0;
+      animation: particleFade ease-in-out infinite;
+    }
+
+    @keyframes particleFade {
+      0%   { opacity: 0;   transform: scale(0) translateY(0); }
+      30%  { opacity: 0.8; transform: scale(1) translateY(-20px); }
+      100% { opacity: 0;   transform: scale(0.3) translateY(-60px); }
+    }
+
+    /* ── BARRA VERTICAL PULSANTE ───────────────────────── */
+    .vert-bar {
+      position: absolute;
+      width: 3px;
+      height: 100%;
+      background: linear-gradient(180deg, transparent, #ec1c24 30%, #ec1c24 70%, transparent);
+      opacity: 0;
+      animation: vertPulse ease-in-out infinite;
+    }
+    .side-left  .vert-bar { right: 0; }
+    .side-right .vert-bar { left: 0; }
+
+    @keyframes vertPulse {
+      0%, 100% { opacity: 0.05; }
+      50%      { opacity: 0.35; }
+    }
+
+    /* ── TRIÁNGULO DECORATIVO ──────────────────────────── */
+    .tri {
+      position: absolute;
+      width: 0; height: 0;
+      border-style: solid;
+      opacity: 0;
+      animation: triPop ease-out infinite;
+    }
+
+    @keyframes triPop {
+      0%   { opacity: 0;   transform: scale(0) rotate(0deg); }
+      20%  { opacity: 0.7; transform: scale(1) rotate(10deg); }
+      80%  { opacity: 0.5; transform: scale(1) rotate(-5deg); }
+      100% { opacity: 0;   transform: scale(0) rotate(-20deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Panel izquierdo -->
+  <div class="side side-left" id="sideLeft"></div>
+
+  <!-- Panel derecho -->
+  <div class="side side-right" id="sideRight"></div>
+
+  <!-- Phaser -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+  <script src="scenes/BootScene.js"></script>
+  <script src="scenes/SplashScene.js"></script>
+  <script src="scenes/MenuScene.js"></script>
+  <script src="scenes/OptionsScene.js"></script>
+  <script src="scenes/DifficultyScene.js"></script>
+  <script src="scenes/GameScene.js"></script>
+  <script src="scenes/GameOverScene.js"></script>
+  <script src="main.js"></script>
+
+  <script>
+  // ── Genera los elementos animados en ambos paneles ────────
+  const TEXTS = [
+    'PHANTOM THIEVES', 'TAKE YOUR HEART', 'PERSONA',
+    'ARSÈNE', 'JOKER', 'ALL OUT ATTACK', 'WILD CHAT',
+    'MEMENTOS', 'METAVERSE', 'SHOWTIME',
+  ];
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function buildSide(id) {
+    const panel = document.getElementById(id);
+    if (!panel) return;
+
+    // Barra vertical pulsante
+    const vbar = document.createElement('div');
+    vbar.className = 'vert-bar';
+    vbar.style.animationDuration = '2.5s';
+    panel.appendChild(vbar);
+
+    // Líneas diagonales (6 por panel)
+    for (let i = 0; i < 6; i++) {
+      const l = document.createElement('div');
+      l.className = 'diag-line';
+      const dur = rand(3, 7);
+      l.style.cssText = `
+        top: ${rand(-20, 80)}%;
+        height: ${rand(1, 3)}px;
+        animation-duration: ${dur}s;
+        animation-delay: ${rand(0, dur)}s;
+        opacity: 0;
+      `;
+      panel.appendChild(l);
+    }
+
+    // Bloques rectangulares (4 por panel)
+    for (let i = 0; i < 4; i++) {
+      const b = document.createElement('div');
+      b.className = 'rect-block';
+      const dur = rand(2.5, 5);
+      b.style.cssText = `
+        top:    ${rand(5, 90)}%;
+        left:   0;
+        width:  100%;
+        height: ${rand(6, 18)}px;
+        animation-duration: ${dur}s;
+        animation-delay:    ${rand(0, dur)}s;
+      `;
+      panel.appendChild(b);
+    }
+
+    // Texto volando (3 por panel)
+    for (let i = 0; i < 3; i++) {
+      const t = document.createElement('div');
+      t.className = 'fly-text';
+      const dur = rand(5, 10);
+      t.textContent = TEXTS[Math.floor(rand(0, TEXTS.length))];
+      t.style.cssText = `
+        left: ${rand(10, 60)}%;
+        top:  50%;
+        animation-duration: ${dur}s;
+        animation-delay:    ${rand(0, dur)}s;
+      `;
+      panel.appendChild(t);
+    }
+
+    // Partículas (8 por panel)
+    for (let i = 0; i < 8; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const size = rand(4, 10);
+      const dur  = rand(1.5, 4);
+      p.style.cssText = `
+        left:   ${rand(5, 90)}%;
+        top:    ${rand(10, 90)}%;
+        width:  ${size}px;
+        height: ${size}px;
+        animation-duration: ${dur}s;
+        animation-delay:    ${rand(0, dur)}s;
+      `;
+      panel.appendChild(p);
+    }
+
+    // Triángulos decorativos (3 por panel)
+    for (let i = 0; i < 3; i++) {
+      const tri = document.createElement('div');
+      tri.className = 'tri';
+      const size = rand(10, 22);
+      const dur  = rand(3, 6);
+      // Triángulo apuntando a la derecha o izquierda según panel
+      const isLeft = id === 'sideLeft';
+      tri.style.cssText = `
+        left:   ${rand(10, 70)}%;
+        top:    ${rand(10, 85)}%;
+        border-width: ${size}px ${isLeft ? size * 1.6 : 0}px ${size}px ${isLeft ? 0 : size * 1.6}px;
+        border-color: transparent ${isLeft ? '#ec1c24' : 'transparent'} transparent ${isLeft ? 'transparent' : '#ec1c24'};
+        animation-duration: ${dur}s;
+        animation-delay:    ${rand(0, dur)}s;
+      `;
+      panel.appendChild(tri);
+    }
+  }
+
+  // Esperar a que el DOM esté listo
+  window.addEventListener('load', () => {
+    buildSide('sideLeft');
+    buildSide('sideRight');
+  });
+  </script>
+
+</body>
+</html>
